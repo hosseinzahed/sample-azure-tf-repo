@@ -209,6 +209,9 @@ resource "azurerm_automation_runbook" "stop_vm" {
 }
 
 # Schedule for Starting VM (Wake) - 8 AM UTC on weekdays
+# Note: start_time sets when the schedule becomes active. The schedule runs at
+# 8 AM UTC based on the hour component. We use a future date to ensure the
+# schedule is created in the future as required by Azure.
 resource "azurerm_automation_schedule" "start_vm" {
   name                    = "Start-VM-Schedule-vm-snoozing-automation"
   resource_group_name     = azurerm_resource_group.vm_snoozing_automation.name
@@ -216,15 +219,20 @@ resource "azurerm_automation_schedule" "start_vm" {
   frequency               = "Week"
   interval                = 1
   timezone                = "UTC"
-  start_time              = timeadd(timestamp(), "24h")
+  start_time              = formatdate("YYYY-MM-DD'T'08:00:00Z", timeadd(timestamp(), "24h"))
   week_days               = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 
+  # Ignore start_time changes to prevent Terraform from updating the schedule
+  # on every apply due to the timestamp() function generating a new value
   lifecycle {
     ignore_changes = [start_time]
   }
 }
 
 # Schedule for Stopping VM (Snooze) - 6 PM UTC on weekdays
+# Note: start_time sets when the schedule becomes active. The schedule runs at
+# 6 PM (18:00) UTC based on the hour component. We use a future date to ensure
+# the schedule is created in the future as required by Azure.
 resource "azurerm_automation_schedule" "stop_vm" {
   name                    = "Stop-VM-Schedule-vm-snoozing-automation"
   resource_group_name     = azurerm_resource_group.vm_snoozing_automation.name
@@ -232,9 +240,11 @@ resource "azurerm_automation_schedule" "stop_vm" {
   frequency               = "Week"
   interval                = 1
   timezone                = "UTC"
-  start_time              = timeadd(timestamp(), "24h")
+  start_time              = formatdate("YYYY-MM-DD'T'18:00:00Z", timeadd(timestamp(), "24h"))
   week_days               = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 
+  # Ignore start_time changes to prevent Terraform from updating the schedule
+  # on every apply due to the timestamp() function generating a new value
   lifecycle {
     ignore_changes = [start_time]
   }
