@@ -9,34 +9,32 @@ The workflow runs automatically on:
 - **Pull Requests**: Runs plan and posts results as a comment
 - **Manual Dispatch**: Allows you to choose plan, apply, or destroy
 
-## Required GitHub Secrets
+## Required Setup
 
-Configure these in your repository: **Settings → Secrets and variables → Actions → New repository secret**
+The workflow uses the **`dev` environment** for secrets and variables. Configure them in: **Settings → Environments → dev**
 
-### Azure Authentication (Required)
+### Required Secrets (Environment: dev)
+
 | Secret Name | Description | How to Get |
 |------------|-------------|------------|
 | `ARM_CLIENT_ID` | Azure Service Principal App ID | From `az ad sp create-for-rbac` output (appId) |
 | `ARM_CLIENT_SECRET` | Azure Service Principal Password | From `az ad sp create-for-rbac` output (password) |
 | `ARM_SUBSCRIPTION_ID` | Azure Subscription ID | Run `az account show --query id -o tsv` |
 | `ARM_TENANT_ID` | Azure AD Tenant ID | From `az ad sp create-for-rbac` output (tenant) |
-
-### Terraform Variables (Required)
-| Secret Name | Description | Example |
-|------------|-------------|---------|
 | `TF_VAR_RESOURCE_GROUP_NAME` | Name for the resource group | `my-terraform-rg` |
 | `TF_VAR_VM_NAME` | Name for the virtual machine | `my-terraform-vm` |
 | `TF_VAR_SSH_PUBLIC_KEY` | SSH public key for VM access | `ssh-rsa AAAAB3...` |
 
-## Optional Configuration Variables
+### Optional Variables (Environment: dev)
 
-Configure these in: **Settings → Secrets and variables → Actions → Variables tab**
+These override the defaults in `variables.tf`. Only set them if you need different values:
 
-| Variable Name | Description | Default |
+| Variable Name | Description | Default (from variables.tf) |
 |--------------|-------------|---------|
-| `TF_VAR_LOCATION` | Azure region | `eastus` |
+| `TF_VAR_LOCATION` | Azure region | `swedencentral` |
 | `TF_VAR_VM_SIZE` | VM size | `Standard_B2s` |
 | `TF_VAR_ADMIN_USERNAME` | Admin username | `azureuser` |
+| `TF_VAR_TAGS` | Custom tags (JSON format) | `{"Environment":"dev"}` |
 
 ## Setting Up Azure Service Principal
 
@@ -44,21 +42,27 @@ Configure these in: **Settings → Secrets and variables → Actions → Variabl
 # Login to Azure
 az login
 
+# Get your subscription ID
+az account show --query id -o tsv
+
 # Create service principal with Contributor role
 az ad sp create-for-rbac \
   --name "github-terraform-sp" \
   --role Contributor \
-  --scopes /subscriptions/<YOUR_SUBSCRIPTION_ID> \
-  --sdk-auth
+  --scopes /subscriptions/<YOUR_SUBSCRIPTION_ID>
 
 # Output will include:
 # {
-#   "clientId": "<ARM_CLIENT_ID>",
-#   "clientSecret": "<ARM_CLIENT_SECRET>",
-#   "subscriptionId": "<ARM_SUBSCRIPTION_ID>",
-#   "tenantId": "<ARM_TENANT_ID>",
-#   ...
+#   "appId": "<ARM_CLIENT_ID>",
+#   "password": "<ARM_CLIENT_SECRET>",
+#   "tenant": "<ARM_TENANT_ID>"
 # }
+
+# To grant Contributor role to an existing service principal:
+az role assignment create \
+  --assignee <SERVICE_PRINCIPAL_CLIENT_ID> \
+  --role Contributor \
+  --scope /subscriptions/<SUBSCRIPTION_ID>
 ```
 
 ## Generate SSH Key Pair
@@ -99,12 +103,15 @@ Choose from:
 
 ## Workflow Steps Explained
 
-1. **Terraform Format Check**: Ensures code follows Terraform formatting standards
-2. **Terraform Init**: Initializes Terraform backend and providers
-3. **Terraform Validate**: Validates configuration syntax
-4. **Terraform Plan**: Creates execution plan showing what will change
-5. **Terraform Apply**: Applies the changes (on main branch push or manual trigger)
-6. **Terraform Destroy**: Removes all infrastructure (manual trigger only)
+1. **Checkout Repository**: Gets the latest code
+2. **Setup Terraform**: Installs Terraform CLI
+3. **Terraform Format Check**: Ensures code follows Terraform formatting standards
+4. **Set Optional Variables**: Conditionally sets optional variables if defined in environment
+5. **Terraform Init**: Initializes Terraform backend and providers
+6. **Terraform Validate**: Validates configuration syntax
+7. **Terraform Plan**: Creates execution plan showing what will change
+8. **Terraform Apply**: Applies the changes (on main branch push or manual trigger)
+9. **Terraform Destroy**: Removes all infrastructure (manual trigger only)
 
 ## Using Tags
 
