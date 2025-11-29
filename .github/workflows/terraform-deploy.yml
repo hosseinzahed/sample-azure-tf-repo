@@ -36,6 +36,7 @@ jobs:
   terraform:
     name: 'Terraform ${{ github.event.inputs.action || github.event_name == ''pull_request'' && ''plan'' || ''apply'' }}'
     runs-on: ubuntu-latest
+    environment: dev
     
     env:
       ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
