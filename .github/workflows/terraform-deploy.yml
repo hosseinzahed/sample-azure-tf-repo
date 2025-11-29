@@ -46,9 +46,6 @@ jobs:
       TF_VAR_resource_group_name: ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
       TF_VAR_vm_name: ${{ secrets.TF_VAR_VM_NAME }}
       TF_VAR_ssh_public_key: ${{ secrets.TF_VAR_SSH_PUBLIC_KEY }}
-      TF_VAR_location: ${{ vars.TF_VAR_LOCATION }}
-      TF_VAR_vm_size: ${{ vars.TF_VAR_VM_SIZE }}
-      TF_VAR_admin_username: ${{ vars.TF_VAR_ADMIN_USERNAME || 'azureuser' }}
     
     defaults:
       run:
@@ -68,6 +65,21 @@ jobs:
       id: fmt
       run: terraform fmt -check -recursive
       continue-on-error: true
+    
+    - name: Set Optional Variables
+      run: |
+        if [ -n "${{ vars.TF_VAR_LOCATION }}" ]; then
+          echo "TF_VAR_location=${{ vars.TF_VAR_LOCATION }}" >> $GITHUB_ENV
+        fi
+        if [ -n "${{ vars.TF_VAR_VM_SIZE }}" ]; then
+          echo "TF_VAR_vm_size=${{ vars.TF_VAR_VM_SIZE }}" >> $GITHUB_ENV
+        fi
+        if [ -n "${{ vars.TF_VAR_ADMIN_USERNAME }}" ]; then
+          echo "TF_VAR_admin_username=${{ vars.TF_VAR_ADMIN_USERNAME }}" >> $GITHUB_ENV
+        fi
+        if [ -n "${{ vars.TF_VAR_TAGS }}" ]; then
+          echo "TF_VAR_tags=${{ vars.TF_VAR_TAGS }}" >> $GITHUB_ENV
+        fi
     
     - name: Terraform Init
       id: init
