@@ -104,3 +104,164 @@ resource "azurerm_linux_virtual_machine" "main" {
 
   disable_password_authentication = true
 }
+
+# ============================================
+# VM Snoozing Automation Infrastructure
+# ============================================
+
+# Resource Group for VM Snoozing Automation
+resource "azurerm_resource_group" "vm_snoozing_automation" {
+  name     = "${var.vm_name}-vm-snoozing-automation"
+  location = var.location
+  tags     = var.tags
+}
+
+# Automation Account for VM Snoozing
+resource "azurerm_automation_account" "vm_snoozing_automation" {
+  name                = "${var.vm_name}-vm-snoozing-automation"
+  location            = azurerm_resource_group.vm_snoozing_automation.location
+  resource_group_name = azurerm_resource_group.vm_snoozing_automation.name
+  sku_name            = "Basic"
+  tags                = var.tags
+
+  identity {
+    type = "SystemAssigned"
+  }
+}
+
+# Role Assignment - Grant Automation Account Contributor access to the VM Resource Group
+resource "azurerm_role_assignment" "vm_snoozing_automation" {
+  scope                = azurerm_resource_group.main.id
+  role_definition_name = "Virtual Machine Contributor"
+  principal_id         = azurerm_automation_account.vm_snoozing_automation.identity[0].principal_id
+}
+
+# Runbook for Starting VM
+resource "azurerm_automation_runbook" "start_vm" {
+  name                    = "Start-VM-vm-snoozing-automation"
+  location                = azurerm_resource_group.vm_snoozing_automation.location
+  resource_group_name     = azurerm_resource_group.vm_snoozing_automation.name
+  automation_account_name = azurerm_automation_account.vm_snoozing_automation.name
+  log_verbose             = false
+  log_progress            = true
+  runbook_type            = "PowerShell"
+  tags                    = var.tags
+
+  content = <<-EOT
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$ResourceGroupName,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$VMName
+    )
+
+    try {
+        # Connect using Managed Identity
+        Connect-AzAccount -Identity
+
+        # Start the VM
+        Write-Output "Starting VM: $VMName in Resource Group: $ResourceGroupName"
+        Start-AzVM -ResourceGroupName $ResourceGroupName -Name $VMName -NoWait
+        Write-Output "VM start command issued successfully"
+    }
+    catch {
+        Write-Error "Failed to start VM: $_"
+        throw
+    }
+  EOT
+}
+
+# Runbook for Stopping VM
+resource "azurerm_automation_runbook" "stop_vm" {
+  name                    = "Stop-VM-vm-snoozing-automation"
+  location                = azurerm_resource_group.vm_snoozing_automation.location
+  resource_group_name     = azurerm_resource_group.vm_snoozing_automation.name
+  automation_account_name = azurerm_automation_account.vm_snoozing_automation.name
+  log_verbose             = false
+  log_progress            = true
+  runbook_type            = "PowerShell"
+  tags                    = var.tags
+
+  content = <<-EOT
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$ResourceGroupName,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$VMName
+    )
+
+    try {
+        # Connect using Managed Identity
+        Connect-AzAccount -Identity
+
+        # Stop the VM (deallocate to avoid charges)
+        Write-Output "Stopping VM: $VMName in Resource Group: $ResourceGroupName"
+        Stop-AzVM -ResourceGroupName $ResourceGroupName -Name $VMName -Force -NoWait
+        Write-Output "VM stop command issued successfully"
+    }
+    catch {
+        Write-Error "Failed to stop VM: $_"
+        throw
+    }
+  EOT
+}
+
+# Schedule for Starting VM (Wake) - 8 AM UTC on weekdays
+resource "azurerm_automation_schedule" "start_vm" {
+  name                    = "Start-VM-Schedule-vm-snoozing-automation"
+  resource_group_name     = azurerm_resource_group.vm_snoozing_automation.name
+  automation_account_name = azurerm_automation_account.vm_snoozing_automation.name
+  frequency               = "Week"
+  interval                = 1
+  timezone                = "UTC"
+  start_time              = timeadd(timestamp(), "24h")
+  week_days               = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+  lifecycle {
+    ignore_changes = [start_time]
+  }
+}
+
+# Schedule for Stopping VM (Snooze) - 6 PM UTC on weekdays
+resource "azurerm_automation_schedule" "stop_vm" {
+  name                    = "Stop-VM-Schedule-vm-snoozing-automation"
+  resource_group_name     = azurerm_resource_group.vm_snoozing_automation.name
+  automation_account_name = azurerm_automation_account.vm_snoozing_automation.name
+  frequency               = "Week"
+  interval                = 1
+  timezone                = "UTC"
+  start_time              = timeadd(timestamp(), "24h")
+  week_days               = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+  lifecycle {
+    ignore_changes = [start_time]
+  }
+}
+
+# Link Start VM Runbook to Schedule
+resource "azurerm_automation_job_schedule" "start_vm" {
+  resource_group_name     = azurerm_resource_group.vm_snoozing_automation.name
+  automation_account_name = azurerm_automation_account.vm_snoozing_automation.name
+  schedule_name           = azurerm_automation_schedule.start_vm.name
+  runbook_name            = azurerm_automation_runbook.start_vm.name
+
+  parameters = {
+    resourcegroupname = azurerm_resource_group.main.name
+    vmname            = azurerm_linux_virtual_machine.main.name
+  }
+}
+
+# Link Stop VM Runbook to Schedule
+resource "azurerm_automation_job_schedule" "stop_vm" {
+  resource_group_name     = azurerm_resource_group.vm_snoozing_automation.name
+  automation_account_name = azurerm_automation_account.vm_snoozing_automation.name
+  schedule_name           = azurerm_automation_schedule.stop_vm.name
+  runbook_name            = azurerm_automation_runbook.stop_vm.name
+
+  parameters = {
+    resourcegroupname = azurerm_resource_group.main.name
+    vmname            = azurerm_linux_virtual_machine.main.name
+  }
+}
