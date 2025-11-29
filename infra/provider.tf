@@ -1,6 +1,6 @@
 terraform {
   required_version = ">= 1.0"
-  
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -11,14 +11,14 @@ terraform {
 
 provider "azurerm" {
   features {}
-  
+
   # Authentication will be handled via environment variables or Azure CLI
   # For GitHub Actions or CI/CD, set these as repository secrets:
   # - ARM_CLIENT_ID
   # - ARM_CLIENT_SECRET
   # - ARM_SUBSCRIPTION_ID
   # - ARM_TENANT_ID
-  
+
   # These can also be set explicitly if needed:
   # subscription_id = var.subscription_id
   # client_id       = var.client_id

@@ -35,7 +35,7 @@ variable "ssh_public_key" {
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
-  default     = {
+  default = {
     Environment = "dev"
   }
 }
