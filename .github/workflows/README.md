@@ -113,16 +113,15 @@ Choose from:
 8. **Terraform Apply**: Applies the changes (on main branch push or manual trigger)
 9. **Terraform Destroy**: Removes all infrastructure (manual trigger only)
 
-## Using Tags
+## Using Custom Tags
 
-To add custom tags, add this variable in **Variables tab**:
+To override default tags, add this variable in the **`dev` environment**:
 
-```
-Name: TF_VAR_tags
-Value: {"Environment":"Production","CostCenter":"Engineering","Owner":"DevOps"}
-```
+1. Go to **Settings → Environments → dev → Add variable**
+2. Name: `TF_VAR_TAGS`
+3. Value: `{"Environment":"Production","CostCenter":"Engineering","Owner":"DevOps"}`
 
-Note: Use proper JSON format for tags.
+Note: Use proper JSON format for tags. If not set, defaults to `{"Environment":"dev"}` from `variables.tf`.
 
 ## Monitoring Workflow
 
@@ -176,19 +175,37 @@ Then add these secrets:
 
 ## Example: Complete Setup Checklist
 
-- [ ] Create Azure Service Principal
+### Step 1: Create Azure Service Principal
+- [ ] Run `az login`
+- [ ] Get subscription ID: `az account show --query id -o tsv`
+- [ ] Create service principal with Contributor role
+- [ ] Save the output (appId, password, tenant)
+
+### Step 2: Create GitHub Environment
+- [ ] Go to **Settings → Environments**
+- [ ] Create environment named `dev`
+
+### Step 3: Add Required Secrets to dev Environment
 - [ ] Add `ARM_CLIENT_ID` secret
 - [ ] Add `ARM_CLIENT_SECRET` secret
 - [ ] Add `ARM_SUBSCRIPTION_ID` secret
 - [ ] Add `ARM_TENANT_ID` secret
-- [ ] Generate SSH key pair
-- [ ] Add `TF_VAR_SSH_PUBLIC_KEY` secret
+- [ ] Generate SSH key: `ssh-keygen -t rsa -b 4096 -f ~/.ssh/azure_terraform_key`
+- [ ] Add `TF_VAR_SSH_PUBLIC_KEY` secret (content of .pub file)
 - [ ] Add `TF_VAR_RESOURCE_GROUP_NAME` secret
 - [ ] Add `TF_VAR_VM_NAME` secret
-- [ ] (Optional) Add configuration variables
-- [ ] Test workflow with manual dispatch (plan)
-- [ ] Review and approve
-- [ ] Run apply or push to main
+
+### Step 4: (Optional) Add Variables to Override Defaults
+- [ ] Add `TF_VAR_LOCATION` if you want different region than `swedencentral`
+- [ ] Add `TF_VAR_VM_SIZE` if you want different size than `Standard_B2s`
+- [ ] Add `TF_VAR_ADMIN_USERNAME` if you want different username than `azureuser`
+- [ ] Add `TF_VAR_TAGS` for custom tags
+
+### Step 5: Test the Workflow
+- [ ] Go to **Actions → Terraform Azure Deployment → Run workflow**
+- [ ] Select action: **plan**
+- [ ] Review the plan output
+- [ ] If looks good, run with action: **apply**
 
 ## Support
 
