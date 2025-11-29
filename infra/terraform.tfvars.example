@@ -3,7 +3,7 @@
 # DO NOT commit terraform.tfvars with sensitive data to version control
 
 resource_group_name = "my-resource-group"
-location            = "eastus"
+location            = "swedencentral"
 vm_name             = "my-vm"
 vm_size             = "Standard_B2s"
 admin_username      = "azureuser"
@@ -11,6 +11,9 @@ admin_username      = "azureuser"
 # SSH public key for VM access
 # Generate with: ssh-keygen -t rsa -b 4096
 # ssh_public_key = ""
+
+# Display the public key to copy it
+cat ~/.ssh/azure_terraform_key.pub
 
 # Tags to organize resources
 tags = {
