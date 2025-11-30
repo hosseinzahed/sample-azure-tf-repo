@@ -32,3 +32,22 @@ output "vm_fqdn" {
   description = "Fully qualified domain name of the VM"
   value       = azurerm_public_ip.main.fqdn
 }
+
+# =============================================================================
+# VM Snoozing Automation Outputs
+# =============================================================================
+
+output "automation_account_id" {
+  description = "ID of the VM snoozing automation account"
+  value       = azurerm_automation_account.vm_snoozing_automation.id
+}
+
+output "automation_account_principal_id" {
+  description = "Principal ID of the VM snoozing automation account's managed identity"
+  value       = azurerm_automation_account.vm_snoozing_automation.identity[0].principal_id
+}
+
+output "vm_snoozing_resource_group_name" {
+  description = "Name of the VM snoozing automation resource group"
+  value       = azurerm_resource_group.vm_snoozing_automation.name
+}
