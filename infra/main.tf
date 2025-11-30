@@ -104,3 +104,205 @@ resource "azurerm_linux_virtual_machine" "main" {
 
   disable_password_authentication = true
 }
+
+# ============================================================================
+# VM Snoozing Automation Resources
+# ============================================================================
+
+# Data Sources
+data "azurerm_client_config" "vm_snoozing_automation" {}
+
+data "azurerm_subscription" "vm_snoozing_automation" {}
+
+# Resource Group for VM Snoozing Automation
+resource "azurerm_resource_group" "vm_snoozing_automation" {
+  name     = "rg-vm-snoozing-automation"
+  location = "Sweden Central"
+}
+
+# Automation Account for VM Snoozing
+resource "azurerm_automation_account" "vm_snoozing_automation" {
+  name                = "aa-vm-snoozing-automation"
+  location            = azurerm_resource_group.vm_snoozing_automation.location
+  resource_group_name = azurerm_resource_group.vm_snoozing_automation.name
+  sku_name            = "Basic"
+
+  identity {
+    type = "SystemAssigned"
+  }
+}
+
+# Role Assignment - Virtual Machine Contributor for Automation Account
+resource "azurerm_role_assignment" "vm_snoozing_automation" {
+  scope                = data.azurerm_subscription.vm_snoozing_automation.id
+  role_definition_name = "Virtual Machine Contributor"
+  principal_id         = azurerm_automation_account.vm_snoozing_automation.identity[0].principal_id
+}
+
+# PowerShell Runbook for VM Snoozing
+resource "azurerm_automation_runbook" "vm_snoozing_automation" {
+  name                    = "rb-vm-snoozing-automation"
+  location                = azurerm_resource_group.vm_snoozing_automation.location
+  resource_group_name     = azurerm_resource_group.vm_snoozing_automation.name
+  automation_account_name = azurerm_automation_account.vm_snoozing_automation.name
+  log_verbose             = true
+  log_progress            = true
+  runbook_type            = "PowerShell"
+
+  content = <<-POWERSHELL
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet("Start", "Stop")]
+        [string]$Action,
+
+        [Parameter(Mandatory=$false)]
+        [string]$ResourceGroupName,
+
+        [Parameter(Mandatory=$false)]
+        [string]$VMNames,
+
+        [Parameter(Mandatory=$false)]
+        [string]$TagName = "AutoSnooze",
+
+        [Parameter(Mandatory=$false)]
+        [string]$TagValue = "true"
+    )
+
+    # Connect using managed identity
+    try {
+        Connect-AzAccount -Identity
+        Write-Output "Successfully connected using managed identity"
+    }
+    catch {
+        Write-Error "Failed to connect using managed identity: $_"
+        throw
+    }
+
+    # Get VMs based on parameters
+    $vms = @()
+
+    if ($VMNames) {
+        # Get specific VMs by name
+        $vmNameList = $VMNames -split ","
+        foreach ($vmName in $vmNameList) {
+            $vmName = $vmName.Trim()
+            if ($ResourceGroupName) {
+                $vm = Get-AzVM -ResourceGroupName $ResourceGroupName -Name $vmName -ErrorAction SilentlyContinue
+            }
+            else {
+                $vm = Get-AzVM | Where-Object { $_.Name -eq $vmName }
+            }
+            if ($vm) {
+                $vms += $vm
+            }
+            else {
+                Write-Warning "VM '$vmName' not found"
+            }
+        }
+    }
+    elseif ($ResourceGroupName) {
+        # Get all VMs in resource group with matching tags
+        $vms = Get-AzVM -ResourceGroupName $ResourceGroupName | Where-Object {
+            $_.Tags[$TagName] -eq $TagValue
+        }
+    }
+    else {
+        # Get all VMs with matching tags across subscription
+        $vms = Get-AzVM | Where-Object {
+            $_.Tags[$TagName] -eq $TagValue
+        }
+    }
+
+    Write-Output "Found $($vms.Count) VM(s) to process"
+
+    foreach ($vm in $vms) {
+        $vmStatus = Get-AzVM -ResourceGroupName $vm.ResourceGroupName -Name $vm.Name -Status
+        $powerState = ($vmStatus.Statuses | Where-Object { $_.Code -like "PowerState/*" }).Code
+
+        Write-Output "Processing VM: $($vm.Name) in RG: $($vm.ResourceGroupName) - Current State: $powerState"
+
+        if ($Action -eq "Stop") {
+            if ($powerState -eq "PowerState/running") {
+                Write-Output "Stopping VM: $($vm.Name)"
+                Stop-AzVM -ResourceGroupName $vm.ResourceGroupName -Name $vm.Name -Force
+                Write-Output "VM $($vm.Name) stopped successfully"
+            }
+            else {
+                Write-Output "VM $($vm.Name) is not running, skipping stop"
+            }
+        }
+        elseif ($Action -eq "Start") {
+            if ($powerState -ne "PowerState/running") {
+                Write-Output "Starting VM: $($vm.Name)"
+                Start-AzVM -ResourceGroupName $vm.ResourceGroupName -Name $vm.Name
+                Write-Output "VM $($vm.Name) started successfully"
+            }
+            else {
+                Write-Output "VM $($vm.Name) is already running, skipping start"
+            }
+        }
+    }
+
+    Write-Output "VM snoozing automation completed. Action: $Action, VMs processed: $($vms.Count)"
+  POWERSHELL
+}
+
+# Schedule for stopping VMs - Weekdays at 6 PM W. Europe time
+resource "azurerm_automation_schedule" "stop_vm_snoozing_automation" {
+  name                    = "schedule-stop-vm-snoozing-automation"
+  resource_group_name     = azurerm_resource_group.vm_snoozing_automation.name
+  automation_account_name = azurerm_automation_account.vm_snoozing_automation.name
+  frequency               = "Week"
+  interval                = 1
+  timezone                = "W. Europe Standard Time"
+  start_time              = formatdate("YYYY-MM-DD'T'18:00:00+01:00", timeadd(timestamp(), "24h"))
+  week_days               = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+  lifecycle {
+    ignore_changes = [start_time]
+  }
+}
+
+# Schedule for starting VMs - Weekdays at 8 AM W. Europe time
+resource "azurerm_automation_schedule" "start_vm_snoozing_automation" {
+  name                    = "schedule-start-vm-snoozing-automation"
+  resource_group_name     = azurerm_resource_group.vm_snoozing_automation.name
+  automation_account_name = azurerm_automation_account.vm_snoozing_automation.name
+  frequency               = "Week"
+  interval                = 1
+  timezone                = "W. Europe Standard Time"
+  start_time              = formatdate("YYYY-MM-DD'T'08:00:00+01:00", timeadd(timestamp(), "24h"))
+  week_days               = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+  lifecycle {
+    ignore_changes = [start_time]
+  }
+}
+
+# Job Schedule Link - Stop VMs
+resource "azurerm_automation_job_schedule" "stop_vm_snoozing_automation" {
+  resource_group_name     = azurerm_resource_group.vm_snoozing_automation.name
+  automation_account_name = azurerm_automation_account.vm_snoozing_automation.name
+  schedule_name           = azurerm_automation_schedule.stop_vm_snoozing_automation.name
+  runbook_name            = azurerm_automation_runbook.vm_snoozing_automation.name
+
+  parameters = {
+    action   = "Stop"
+    tagname  = "AutoSnooze"
+    tagvalue = "true"
+  }
+}
+
+# Job Schedule Link - Start VMs
+resource "azurerm_automation_job_schedule" "start_vm_snoozing_automation" {
+  resource_group_name     = azurerm_resource_group.vm_snoozing_automation.name
+  automation_account_name = azurerm_automation_account.vm_snoozing_automation.name
+  schedule_name           = azurerm_automation_schedule.start_vm_snoozing_automation.name
+  runbook_name            = azurerm_automation_runbook.vm_snoozing_automation.name
+
+  parameters = {
+    action   = "Start"
+    tagname  = "AutoSnooze"
+    tagvalue = "true"
+  }
+}
