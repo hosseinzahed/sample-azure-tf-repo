@@ -44,7 +44,7 @@ output "automation_account_id_vm_snoozing_automation" {
 
 output "managed_identity_principal_id_vm_snoozing_automation" {
   description = "Principal ID of the managed identity for VM snoozing automation"
-  value       = azurerm_automation_account.vm_snoozing_automation.identity[0].principal_id
+  value       = try(azurerm_automation_account.vm_snoozing_automation.identity[0].principal_id, null)
 }
 
 output "resource_group_name_vm_snoozing_automation" {

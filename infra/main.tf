@@ -211,7 +211,7 @@ resource "azurerm_automation_schedule" "stop_vm_snoozing_automation" {
   frequency               = "Week"
   interval                = 1
   timezone                = "Europe/Amsterdam"
-  start_time              = formatdate("YYYY-MM-DD'T'18:00:00+01:00", timeadd(timestamp(), "24h"))
+  start_time              = formatdate("YYYY-MM-DD'T'18:00:00Z", timeadd(timestamp(), "24h"))
   week_days               = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 
   lifecycle {
@@ -227,7 +227,7 @@ resource "azurerm_automation_schedule" "start_vm_snoozing_automation" {
   frequency               = "Week"
   interval                = 1
   timezone                = "Europe/Amsterdam"
-  start_time              = formatdate("YYYY-MM-DD'T'08:00:00+01:00", timeadd(timestamp(), "24h"))
+  start_time              = formatdate("YYYY-MM-DD'T'08:00:00Z", timeadd(timestamp(), "24h"))
   week_days               = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 
   lifecycle {
