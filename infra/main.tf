@@ -181,12 +181,12 @@ resource "azurerm_automation_runbook" "vm_snoozing_automation" {
     # Get VMs based on parameters
     $vms = @()
 
-    if ($VMNames -ne "") {
+    if (-not [string]::IsNullOrEmpty($VMNames)) {
         # Get specific VMs by name
         $vmNameList = $VMNames -split ","
         foreach ($vmName in $vmNameList) {
             $vmName = $vmName.Trim()
-            if ($ResourceGroupName -ne "") {
+            if (-not [string]::IsNullOrEmpty($ResourceGroupName)) {
                 $vm = Get-AzVM -ResourceGroupName $ResourceGroupName -Name $vmName -ErrorAction SilentlyContinue
             } else {
                 $vm = Get-AzVM | Where-Object { $_.Name -eq $vmName }
@@ -197,7 +197,7 @@ resource "azurerm_automation_runbook" "vm_snoozing_automation" {
                 Write-Warning "VM '$vmName' not found"
             }
         }
-    } elseif ($ResourceGroupName -ne "") {
+    } elseif (-not [string]::IsNullOrEmpty($ResourceGroupName)) {
         # Get all VMs in resource group with matching tag
         $vms = Get-AzVM -ResourceGroupName $ResourceGroupName | Where-Object { $_.Tags[$TagName] -eq $TagValue }
     } else {
@@ -248,7 +248,7 @@ resource "azurerm_automation_schedule" "stop_vm_snoozing_automation" {
   frequency               = "Week"
   interval                = 1
   timezone                = "Europe/Amsterdam"
-  start_time              = formatdate("YYYY-MM-DD'T'18:00:00+01:00", timeadd(timestamp(), "24h"))
+  start_time              = formatdate("YYYY-MM-DD'T'18:00:00Z", timeadd(timestamp(), "24h"))
   week_days               = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 
   lifecycle {
@@ -264,7 +264,7 @@ resource "azurerm_automation_schedule" "start_vm_snoozing_automation" {
   frequency               = "Week"
   interval                = 1
   timezone                = "Europe/Amsterdam"
-  start_time              = formatdate("YYYY-MM-DD'T'08:00:00+01:00", timeadd(timestamp(), "24h"))
+  start_time              = formatdate("YYYY-MM-DD'T'08:00:00Z", timeadd(timestamp(), "24h"))
   week_days               = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 
   lifecycle {
